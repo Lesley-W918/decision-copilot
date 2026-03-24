@@ -2101,16 +2101,88 @@
 // ══════════════════════════════════════════════════════
 let DEEPSEEK_API_KEY = localStorage.getItem('copilot_api_key') || '';
 
-// 统一 fetch 包装：自动注入 API Key 和 CORS 所需 headers
+// 统一 fetch 包装：自动实现 Claude 格式到 DeepSeek 格式的无缝转换
 const _origFetch = window.fetch.bind(window);
-window.fetch = function(url, opts) {
-  if (typeof url === 'string' && url.startsWith('https://platform.deepseek.com/api_keys')) {
+window.fetch = async function(url, opts) {
+  // 拦截所有发往 DeepSeek 的大模型请求
+  if (typeof url === 'string' && url.includes('api.deepseek.com')) {
+    // 1. 修正为正确的 DeepSeek 聊天接口
+    url = 'https://api.deepseek.com/chat/completions';
     opts = opts || {};
+    
+    // 2. 注入 DeepSeek 专属的身份验证头
     opts.headers = Object.assign({}, opts.headers || {}, {
-      'x-api-key': DEEPSEEK_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
+      'Authorization': 'Bearer ' + DEEPSEEK_API_KEY,
+      'Content-Type': 'application/json'
     });
+    // 清理掉原代码中 Claude 专属的头，防止跨域拦截
+    delete opts.headers['x-api-key'];
+    delete opts.headers['anthropic-version'];
+    delete opts.headers['anthropic-dangerous-direct-browser-access'];
+
+    // 3. 将发出的 Claude 参数格式，转换为 DeepSeek 格式
+    let isStream = false;
+    if (opts.body) {
+      try {
+        const body = JSON.parse(opts.body);
+        isStream = body.stream || false;
+        const dsBody = {
+          model: 'deepseek-chat', // 强制使用 DeepSeek 模型
+          messages: [],
+          stream: isStream
+        };
+        // 转换 System Prompt
+        if (body.system) {
+          dsBody.messages.push({ role: 'system', content: body.system });
+        }
+        if (body.messages) {
+          dsBody.messages = dsBody.messages.concat(body.messages);
+        }
+        opts.body = JSON.stringify(dsBody);
+      } catch(e) {}
+    }
+
+    // 4. 发送真实的请求
+    const response = await _origFetch(url, opts);
+
+    // 5. 将 DeepSeek 的流式返回数据，逆向伪装成原代码期待的 Claude 格式
+    if (response.ok && isStream) {
+      const stream = new ReadableStream({
+        async start(controller) {
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          const encoder = new TextEncoder();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) { controller.close(); break; }
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                try {
+                  const dsData = JSON.parse(line.slice(6));
+                  const text = dsData.choices[0]?.delta?.content || '';
+                  if (text) {
+                    const claudeFmt = { type: 'content_block_delta', delta: { text: text } };
+                    controller.enqueue(encoder.encode('data: ' + JSON.stringify(claudeFmt) + '\n\n'));
+                  }
+                } catch(e) {}
+              }
+            }
+          }
+        }
+      });
+      return new Response(stream, { headers: response.headers });
+    } 
+    // 6. 将非流式返回数据也伪装成 Claude 格式
+    else if (response.ok && !isStream) {
+      const dsJson = await response.json();
+      const text = dsJson.choices[0]?.message?.content || '';
+      const claudeFmt = { content: [{ text: text }] };
+      return new Response(JSON.stringify(claudeFmt), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    
+    return response;
   }
   return _origFetch(url, opts);
 };
