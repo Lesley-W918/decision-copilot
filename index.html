@@ -2099,7 +2099,7 @@
 //  API KEY LAYER — 独立部署版本
 //  支持 GitHub Pages / Vercel 等静态托管
 // ══════════════════════════════════════════════════════
-let ANTHROPIC_API_KEY = localStorage.getItem('copilot_api_key') || '';
+let DEEPSEEK_API_KEY = localStorage.getItem('copilot_api_key') || '';
 
 // 统一 fetch 包装：自动注入 API Key 和 CORS 所需 headers
 const _origFetch = window.fetch.bind(window);
@@ -2107,7 +2107,7 @@ window.fetch = function(url, opts) {
   if (typeof url === 'string' && url.startsWith('https://api.anthropic.com')) {
     opts = opts || {};
     opts.headers = Object.assign({}, opts.headers || {}, {
-      'x-api-key': ANTHROPIC_API_KEY,
+      'x-api-key': DEEPSEEK_API_KEY,
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true'
     });
@@ -2185,9 +2185,9 @@ function confirmApiKey() {
     inp.placeholder = '请输入有效的 sk-ant- 开头的 Key';
     return;
   }
-  ANTHROPIC_API_KEY = key;
+  DEEPSEEK_API_KEY = key;
   localStorage.setItem('copilot_api_key', key);
-  ANTHROPIC_API_KEY = key;
+  DEEPSEEK_API_KEY = key;
   localStorage.setItem('copilot_api_key', key);
   const modal = document.getElementById('apiKeyModal');
   if (modal) modal.remove();
@@ -2203,7 +2203,7 @@ function updateKeyStatus() {
 
 function resetApiKey() {
   if (confirm('确认重置 API Key？')) {
-    ANTHROPIC_API_KEY = '';
+    DEEPSEEK_API_KEY = '';
     localStorage.removeItem('copilot_api_key');
     updateKeyStatus();
     showApiKeyModal();
@@ -2213,7 +2213,7 @@ function resetApiKey() {
 // 页面加载时检查 Key
 document.addEventListener('DOMContentLoaded', () => {
   updateKeyStatus();
-  if (!ANTHROPIC_API_KEY) showApiKeyModal();
+  if (!DEEPSEEK_API_KEY) showApiKeyModal();
 });
 
 // ── STATE ──
