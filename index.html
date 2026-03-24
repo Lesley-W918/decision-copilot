@@ -2104,7 +2104,7 @@ let DEEPSEEK_API_KEY = localStorage.getItem('copilot_api_key') || '';
 // 统一 fetch 包装：自动注入 API Key 和 CORS 所需 headers
 const _origFetch = window.fetch.bind(window);
 window.fetch = function(url, opts) {
-  if (typeof url === 'string' && url.startsWith('https://api.anthropic.com')) {
+  if (typeof url === 'string' && url.startsWith('https://platform.deepseek.com/api_keys')) {
     opts = opts || {};
     opts.headers = Object.assign({}, opts.headers || {}, {
       'x-api-key': DEEPSEEK_API_KEY,
@@ -2161,7 +2161,7 @@ function showApiKeyModal() {
       <div style="text-align:center">
         <a href="https://console.anthropic.com/account/keys" target="_blank"
            style="font-size:11px;color:var(--accent-blue);text-decoration:none">
-          → 前往 Anthropic Console 获取 API Key
+          → 前往 https://platform.deepseek.com/api_keys 获取 API Key
         </a>
       </div>
       <div style="margin-top:14px;padding:10px 12px;background:var(--bg-elevated);
@@ -2609,7 +2609,7 @@ ${JSON.stringify(structuredData, null, 2)}`;
   let rawText = '';
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.deepseek.com/v1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3061,7 +3061,7 @@ async function parseAndImportPaste() {
   showToast('⏳ AI 正在解析调研数据...');
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.deepseek.com/v1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3525,7 +3525,7 @@ function resetSandbox() {
 // ── GATEWAY 5: Final Report ──
 
 // ══════════════════════════════════════════════════════
-//  A7_REPORTER — 真实 Claude API，逐条回答分析问题
+//  A7_REPORTER — 真实 DeepSeek API，逐条回答分析问题
 // ══════════════════════════════════════════════════════
 
 const A7_SYSTEM_PROMPT = `你是 A7_Reporter，负责整合全链路分析数据，生成结构化的商业决策报告。
@@ -3968,7 +3968,7 @@ ${simResults.map(r => r.question + '：' + r.value + '（' + r.note + '）').joi
   let rawText = '';
 
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.deepseek.com/v1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4548,7 +4548,7 @@ function fmtW(v) {
 
 // ══════════════════════════════════════════════════════
 //  情报库面板 + 宏观环境面板
-//  私有知识库管理 + 真实 Claude API 分析
+//  私有知识库管理 + 真实 DeepSeek API 分析
 // ══════════════════════════════════════════════════════
 
 // ── 知识库本地存储 ──
@@ -4735,7 +4735,7 @@ ${kb.intel.map(i => `[${i.type}] ${i.name}\n${i.content}`).join('\n\n')}
 
   let raw = '';
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.deepseek.com/v1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -4963,7 +4963,7 @@ ${kb.macro.map(i => `[${i.category}] ${i.title}\n${i.content}`).join('\n\n')}
 
   let raw = '';
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.deepseek.com/v1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -5114,7 +5114,7 @@ async function exportSurvey() {
   // 调用 Claude 生成调研邀请文案
   let copyText = '';
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.deepseek.com/v1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -5400,7 +5400,7 @@ function confirmStrategyAndReport() {
 
 // ══════════════════════════════════════════════════════
 //  A1_VALIDATOR — 意图识别 + 多轮澄清 + 结构化输出
-//  真实调用 Claude API，持续对话直到信息完整
+//  真实调用 DeepSeek API，持续对话直到信息完整
 // ══════════════════════════════════════════════════════
 
 const A1_SYSTEM_PROMPT = `你是 A1_Validator，一个专业的商业决策分析师助手，负责通过多轮对话将用户模糊的商业想法转化为可被分析验证的结构化商业问题。
@@ -5480,7 +5480,7 @@ async function callA1(userMessage) {
 
   // ── 流式请求：用于实时展示对话文字 ──
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.deepseek.com/v1', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
