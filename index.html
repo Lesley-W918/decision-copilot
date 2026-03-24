@@ -2142,7 +2142,7 @@ function showApiKeyModal() {
                     text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
           DEEPSEEK API KEY
         </div>
-        <input id="apiKeyInput" type="password" placeholder="sk-ant-api03-..."
+        <input id="apiKeyInput" type="password" placeholder="sk-..."
           style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-soft);
                  border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text-primary);
                  outline:none;box-sizing:border-box;font-family:var(--font-mono);
@@ -2180,13 +2180,11 @@ function showApiKeyModal() {
 function confirmApiKey() {
   const inp = document.getElementById('apiKeyInput');
   const key = inp ? inp.value.trim() : '';
-  if (!key || !key.startsWith('sk-ant-')) {
+  if (!key || !key.startsWith('sk-')) {
     inp.style.borderColor = 'var(--accent-red)';
-    inp.placeholder = '请输入有效的 sk-ant- 开头的 Key';
+    inp.placeholder = '请输入有效的 sk- 开头的 Key';
     return;
   }
-  DEEPSEEK_API_KEY = key;
-  localStorage.setItem('copilot_api_key', key);
   DEEPSEEK_API_KEY = key;
   localStorage.setItem('copilot_api_key', key);
   const modal = document.getElementById('apiKeyModal');
