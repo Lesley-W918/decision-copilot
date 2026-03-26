@@ -2096,176 +2096,35 @@
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 
 // ══════════════════════════════════════════════════════
-//  DEEPSEEK API LAYER
-//  浏览器直接调用 DeepSeek（支持 CORS）
-//  Key 存储在 localStorage，用户首次使用时填写
+//  API LAYER — 通过 Vercel /api/chat 代理调用 DeepSeek
+//  Key 存放在 Vercel 环境变量，浏览器无需持有
 // ══════════════════════════════════════════════════════
-let DEEPSEEK_API_KEY = localStorage.getItem('copilot_ds_key') || '';
 
-// 拦截所有发往 Anthropic 的请求，转为 DeepSeek 调用
+// 拦截所有发往 Anthropic 的请求，转发到本地代理接口
 const _origFetch = window.fetch.bind(window);
-window.fetch = async function(url, opts) {
-  if (typeof url !== 'string' || !url.startsWith('https://api.anthropic.com')) {
-    return _origFetch(url, opts);
+window.fetch = function(url, opts) {
+  if (typeof url === 'string' && url.startsWith('https://api.anthropic.com')) {
+    return _origFetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: opts.body   // 直接透传原始 Anthropic 格式，代理层负责转换
+    });
   }
-
-  if (!DEEPSEEK_API_KEY) {
-    showApiKeyModal();
-    throw new Error('请先配置 DeepSeek API Key');
-  }
-
-  const body = JSON.parse(opts.body || '{}');
-  const isStream = !!body.stream;
-
-  // 构建 OpenAI 兼容格式
-  const messages = [];
-  if (body.system) messages.push({ role: 'system', content: body.system });
-  (body.messages || []).forEach(m => messages.push({ role: m.role, content: m.content }));
-
-  const dsResp = await _origFetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + DEEPSEEK_API_KEY
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages,
-      max_tokens: body.max_tokens || 2000,
-      stream: isStream
-    })
-  });
-
-  if (!dsResp.ok) {
-    const err = await dsResp.text();
-    throw new Error('DeepSeek API 错误 ' + dsResp.status + ': ' + err.slice(0, 200));
-  }
-
-  // 非流式：转换响应格式
-  if (!isStream) {
-    const data = await dsResp.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    return new Response(
-      JSON.stringify({ content: [{ type: 'text', text }] }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // 流式：把 OpenAI SSE 转换成 Anthropic SSE 格式
-  const { readable, writable } = new TransformStream();
-  const writer = writable.getWriter();
-  const enc = new TextEncoder();
-  const dec = new TextDecoder();
-
-  (async () => {
-    try {
-      const reader = dsResp.body.getReader();
-      let buf = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6).trim();
-          if (payload === '[DONE]') continue;
-          try {
-            const chunk = JSON.parse(payload);
-            const delta = chunk.choices?.[0]?.delta?.content;
-            if (delta != null) {
-              const out = JSON.stringify({
-                type: 'content_block_delta',
-                delta: { type: 'text_delta', text: delta }
-              });
-              await writer.write(enc.encode('data: ' + out + '\n\n'));
-            }
-          } catch {}
-        }
-      }
-    } finally {
-      await writer.close().catch(() => {});
-    }
-  })();
-
-  return new Response(readable, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' }
-  });
+  return _origFetch(url, opts);
 };
 
-// ── API Key 弹窗 ──
-function showApiKeyModal() {
-  if (document.getElementById('apiKeyModal')) return;
-  const el = document.createElement('div');
-  el.id = 'apiKeyModal';
-  el.style.cssText = 'position:fixed;inset:0;background:rgba(10,12,16,.95);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  el.innerHTML = `
-    <div style="background:var(--bg-card);border:1px solid var(--border-soft);border-radius:16px;padding:32px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)">
-      <div style="text-align:center;margin-bottom:24px">
-        <div style="font-size:36px;margin-bottom:12px">⚡</div>
-        <div style="font-family:var(--font-display);font-size:20px;font-weight:600;color:var(--text-primary);margin-bottom:8px">商业决策智能协同系统</div>
-        <div style="font-size:12px;color:var(--text-dim);line-height:1.7">请输入 DeepSeek API Key 启动系统<br>Key 仅保存在本地浏览器，不会上传至任何服务器</div>
-      </div>
-      <div style="margin-bottom:12px">
-        <div style="font-size:11px;color:var(--text-dim);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">DeepSeek API Key</div>
-        <input id="apiKeyInput" type="password" placeholder="sk-xxxxxxxxxxxxxxxx"
-          style="width:100%;background:var(--bg-elevated);border:1px solid var(--border-soft);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text-primary);outline:none;box-sizing:border-box;font-family:var(--font-mono)"
-          onfocus="this.style.borderColor='var(--accent-blue)'"
-          onblur="this.style.borderColor='var(--border-soft)'"
-          onkeydown="if(event.key==='Enter') confirmApiKey()">
-      </div>
-      <button onclick="confirmApiKey()"
-        style="width:100%;padding:11px;background:linear-gradient(135deg,#4d9ef5,#36d1c4);border:none;border-radius:8px;color:#0a0c10;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px;font-family:var(--font-body)"
-        onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-        开始使用
-      </button>
-      <div style="text-align:center;margin-bottom:12px">
-        <a href="https://platform.deepseek.com/api_keys" target="_blank" style="font-size:11px;color:var(--accent-blue);text-decoration:none">→ 前往 DeepSeek 平台获取 API Key</a>
-      </div>
-      <div style="padding:10px 12px;background:var(--bg-elevated);border-radius:8px;font-size:11px;color:var(--text-dim);line-height:1.6">
-        💡 DeepSeek API 价格极低，一次完整分析约 <strong style="color:var(--text-secondary)">¥0.01–0.05</strong>
-      </div>
-    </div>`;
-  document.body.appendChild(el);
-  setTimeout(() => { const inp = document.getElementById('apiKeyInput'); if (inp) inp.focus(); }, 100);
+// Key 由服务端管理，前端无弹窗
+function showApiKeyModal() {}
+function confirmApiKey() {}
+function resetApiKey() {
+  alert('API Key 存储在 Vercel 环境变量中（DEEPSEEK_API_KEY），请登录 Vercel 控制台修改。');
 }
-
-function confirmApiKey() {
-  const inp = document.getElementById('apiKeyInput');
-  const key = inp ? inp.value.trim() : '';
-  if (!key || !key.startsWith('sk-')) {
-    if (inp) { inp.style.borderColor = 'var(--accent-red)'; inp.placeholder = '请输入 sk- 开头的有效 Key'; }
-    return;
-  }
-  DEEPSEEK_API_KEY = key;
-  localStorage.setItem('copilot_ds_key', key);
-  const modal = document.getElementById('apiKeyModal');
-  if (modal) modal.remove();
-  updateKeyStatus();
-}
-
 function updateKeyStatus() {
   const el = document.getElementById('keyStatusText');
-  if (!el) return;
-  const k = localStorage.getItem('copilot_ds_key') || '';
-  el.textContent = k ? '🔑 …' + k.slice(-4) : 'API Key';
+  if (el) el.textContent = 'DeepSeek';
 }
 
-function resetApiKey() {
-  if (confirm('确认重置 API Key？')) {
-    DEEPSEEK_API_KEY = '';
-    localStorage.removeItem('copilot_ds_key');
-    updateKeyStatus();
-    showApiKeyModal();
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  updateKeyStatus();
-  if (!DEEPSEEK_API_KEY) showApiKeyModal();
-});
+document.addEventListener('DOMContentLoaded', updateKeyStatus);
 
 
 // ── STATE ──
@@ -2411,8 +2270,12 @@ function syncTabToStage(step) {
 
 // ── QUICK STARTS ──
 function useQuickStart(text) {
+  // 先打开 modal 让用户看到对话流程
+  if (typeof toggleChatModal === 'function' && !chatModalOpen) {
+    toggleChatModal();
+  }
   document.getElementById('chatInput').value = text;
-  sendMessage();
+  setTimeout(sendMessage, 300);  // 等 modal 动画完成后发送
 }
 
 // ── ADD CHAT MESSAGE ──
@@ -2456,10 +2319,8 @@ function addMessage(role, content, extra = {}) {
   if (hidden2 && hidden2 !== container) {
     hidden2.appendChild(div.cloneNode(true));
   }
-  // Open modal if first message (auto-open on first interaction)
-  if (!chatModalOpen && container && container.children.length === 1) {
-    toggleChatModal();
-  }
+  // 通知 chat badge（合并入主函数，避免 patch 链）
+  if (typeof notifyChatBadge === 'function') notifyChatBadge();
   return div;
 }
 
@@ -6537,13 +6398,7 @@ function syncMiniWorkflow() {
   track.innerHTML = html;
 }
 
-// Patch addMessage to also sync to mobile chat if drawer open
-const _origAddMessage = addMessage;
-function addMessage(role, content, extra) {
-  const el = _origAddMessage(role, content, extra);
-  if (chatDrawerOpen) syncChatToMobile();
-  return el;
-}
+// addMessage patch removed - merged into main function
 
 // Patch setAgentStatus to sync mobile strip
 const _origSetAgentStatus = setAgentStatus;
@@ -6771,16 +6626,8 @@ function notifyChatBadge() {
   syncAgentStripToModal();
 }
 
-// addMessage 패치
-const __addMsgBase = addMessage;
-addMessage = function(role, content, extra) {
-  const el = __addMsgBase(role, content, extra);
-  notifyChatBadge();
-  return el;
-};
+// addMessage patch removed - merged into main function
 
-// setAgentStatus 패치
-const __setAgentBase = setAgentStatus;
 </script>
 
 </body>
