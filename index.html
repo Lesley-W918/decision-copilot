@@ -5407,6 +5407,7 @@ async function callA1(userMessage) {
 
     if (!resp.ok) {
       const errBody = await resp.text();
+      showToast('❌ /api/chat 返回 ' + resp.status + '：' + errBody.slice(0, 60), 6000);
       throw new Error(`HTTP ${resp.status}: ${errBody.slice(0, 200)}`);
     }
 
@@ -5441,9 +5442,10 @@ async function callA1(userMessage) {
     }
   } catch (err) {
     apiError = err;
-    fullText = '⚠ 连接出错：' + err.message;
+    fullText = '⚠ API 调用失败：' + err.message;
     finalizeStreamingBubble(thinkingEl, fullText);
     updateContextSummary('请求失败，请重试');
+    showToast('❌ ' + err.message.slice(0, 80), 5000);
     return;
   }
 
