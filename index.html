@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>决策智能协同系统 · AI Co-Pilot</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js" crossorigin="anonymous"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;600;700&family=JetBrains+Mono:wght@300;400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap');
 
@@ -1819,6 +1819,25 @@
     font-size: 10.5px;
   }
 </style>
+<script>
+window.addEventListener('error', function(e) {
+  // 捕获跨域脚本错误，显示可读提示
+  if (e.message === 'Script error.' || e.message === 'Script error') return;
+  var msg = e.message || 'Unknown error';
+  var src = e.filename ? e.filename.split('/').pop() : '';
+  console.error('[Global Error]', msg, src, 'L'+e.lineno);
+  if (typeof showToast === 'function') {
+    showToast('❌ JS错误: ' + msg.slice(0,60), 5000);
+  }
+});
+window.addEventListener('unhandledrejection', function(e) {
+  var msg = e.reason && e.reason.message ? e.reason.message : String(e.reason);
+  console.error('[Unhandled Promise]', msg);
+  if (typeof showToast === 'function') {
+    showToast('❌ 异步错误: ' + msg.slice(0,60), 5000);
+  }
+});
+</script>
 </head>
 <body>
 
@@ -1852,7 +1871,7 @@
     <span style="font-size:10px">🔑</span>
     <span id="keyStatusText">API Key</span>
   </button>
-    <a href="/cdn-cgi/l/email-protection#7d0a1c131a191c13494f45453d1a101c1411531e1210" title="联系开发者" style="display:flex;align-items:center;gap:5px;padding:3px 10px;
+    <a href="mailto:wangdan4288@gmail.com" title="联系开发者" style="display:flex;align-items:center;gap:5px;padding:3px 10px;
             background:var(--bg-elevated);border:1px solid var(--border-dim);
             border-radius:12px;font-size:11px;color:var(--text-dim);
             text-decoration:none;transition:all .15s;flex-shrink:0" onmouseover="this.style.borderColor='var(--accent-blue)';this.style.color='var(--text-secondary)'" onmouseout="this.style.borderColor='var(--border-dim)';this.style.color='var(--text-dim)'">
@@ -2093,7 +2112,7 @@
   <div class="agent-badge waiting" data-agent="A7"><div class="agent-badge-dot"></div>A7</div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 
 // ══════════════════════════════════════════════════════
 //  API LAYER — 通过 Vercel /api/chat 代理调用 DeepSeek
@@ -2107,7 +2126,19 @@ window.fetch = function(url, opts) {
     return _origFetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: opts.body   // 直接透传原始 Anthropic 格式，代理层负责转换
+      body: opts.body
+    }).then(function(resp) {
+      if (!resp.ok && typeof showToast === 'function') {
+        resp.clone().text().then(function(t) {
+          showToast('❌ /api/chat ' + resp.status + ': ' + t.slice(0,80), 6000);
+        });
+      }
+      return resp;
+    }).catch(function(err) {
+      if (typeof showToast === 'function') {
+        showToast('❌ 网络错误: ' + err.message, 6000);
+      }
+      throw err;
     });
   }
   return _origFetch(url, opts);
@@ -6300,7 +6331,7 @@ function mobileSwitchTab(el) {
 
 // Keep mobile and desktop tabs in sync
 const _origSyncTabToStage = syncTabToStage;
-function syncTabToStage(step) {
+syncTabToStage = function(step) {
   _origSyncTabToStage(step);
   // Sync mobile bar
   const activeTabId = state.activeTab;
@@ -6312,7 +6343,7 @@ function syncTabToStage(step) {
 
 // Override switchTab to also sync mobile bar
 const _origSwitchTab = switchTab;
-function switchTab(tabIdOrEl) {
+switchTab = function(tabIdOrEl) {
   _origSwitchTab(tabIdOrEl);
   const tabId = typeof tabIdOrEl === 'string' ? tabIdOrEl : tabIdOrEl.dataset.tab;
   document.querySelectorAll('.mobile-tab-item').forEach(t => {
@@ -6404,7 +6435,7 @@ function syncMiniWorkflow() {
 
 // Patch setAgentStatus to sync mobile strip
 const _origSetAgentStatus = setAgentStatus;
-function setAgentStatus(agentId, status) {
+setAgentStatus = function(agentId, status) {
   _origSetAgentStatus(agentId, status);
   if (chatDrawerOpen) {
     const desktopStrip = document.getElementById('agentStrip');
@@ -6627,8 +6658,6 @@ function notifyChatBadge() {
   }
   syncAgentStripToModal();
 }
-
-// addMessage patch removed - merged into main function
 
 </script>
 
